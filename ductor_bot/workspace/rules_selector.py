@@ -45,6 +45,7 @@ class RulesSelector:
         codex_result = auth.get("codex")
         gemini_result = auth.get("gemini")
         grok_result = auth.get("grok")
+        commandcode_result = auth.get("commandcode")
 
         self._claude_authenticated = (
             claude_result.status == AuthStatus.AUTHENTICATED if claude_result else False
@@ -58,11 +59,14 @@ class RulesSelector:
         self._grok_authenticated = (
             grok_result.status == AuthStatus.AUTHENTICATED if grok_result else False
         )
+        self._commandcode_authenticated = (
+            commandcode_result.status == AuthStatus.AUTHENTICATED if commandcode_result else False
+        )
 
     @property
     def _agents_md_needed(self) -> bool:
-        """AGENTS.md is shared by Codex and Grok Build."""
-        return self._codex_authenticated or self._grok_authenticated
+        """AGENTS.md is shared by Codex, Grok Build, and Command Code."""
+        return self._codex_authenticated or self._grok_authenticated or self._commandcode_authenticated
 
     @property
     def _authenticated_count(self) -> int:
@@ -73,6 +77,7 @@ class RulesSelector:
                 self._codex_authenticated,
                 self._gemini_authenticated,
                 self._grok_authenticated,
+                self._commandcode_authenticated,
             )
         )
 
@@ -88,7 +93,7 @@ class RulesSelector:
         """
         if self._authenticated_count >= 2:
             return "all-clis"
-        if self._codex_authenticated or self._grok_authenticated:
+        if self._codex_authenticated or self._grok_authenticated or self._commandcode_authenticated:
             return "codex-only"
         if self._gemini_authenticated:
             return "gemini-only"
@@ -154,12 +159,14 @@ class RulesSelector:
         """
         variant = self.get_variant_suffix()
         logger.info(
-            "Deploying rule files (variant: %s, claude=%s, codex=%s, gemini=%s, grok=%s)",
+            "Deploying rule files (variant: %s, claude=%s, codex=%s, gemini=%s, grok=%s, "
+            "commandcode=%s)",
             variant,
             self._claude_authenticated,
             self._codex_authenticated,
             self._gemini_authenticated,
             self._grok_authenticated,
+            self._commandcode_authenticated,
         )
 
         template_dirs = self.discover_template_directories()
@@ -209,12 +216,13 @@ class RulesSelector:
                 logger.exception("Failed to deploy %s", template)
 
         logger.info(
-            "Deployed %d rule files (Claude=%s, Codex=%s, Gemini=%s, Grok=%s)",
+            "Deployed %d rule files (Claude=%s, Codex=%s, Gemini=%s, Grok=%s, CommandCode=%s)",
             deployed_count,
             self._claude_authenticated,
             self._codex_authenticated,
             self._gemini_authenticated,
             self._grok_authenticated,
+            self._commandcode_authenticated,
         )
 
         # Cleanup: Remove stale files that don't match current auth status

@@ -368,6 +368,7 @@ class DockerManager:
             (home / ".claude", f"{container_home}/.claude", "rw"),
             (home / ".codex", f"{container_home}/.codex", "rw"),
             (home / ".gemini", f"{container_home}/.gemini", "rw"),
+            (home / ".commandcode", f"{container_home}/.commandcode", "rw"),
         ]
 
         # Optional: mount host cache dir for browser profiles & binaries.

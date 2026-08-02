@@ -208,6 +208,7 @@ class CLIParametersConfig(BaseModel):
     gemini: list[str] = Field(default_factory=list)
     antigravity: list[str] = Field(default_factory=list)
     grok: list[str] = Field(default_factory=list)
+    commandcode: list[str] = Field(default_factory=list)
 
 
 class MatrixConfig(BaseModel):
@@ -408,6 +409,7 @@ class SkillSyncProviders(BaseModel):
     codex: bool = True
     gemini: bool = True
     grok: bool = True
+    commandcode: bool = True
 
 
 class SkillsConfig(BaseModel):
@@ -635,10 +637,31 @@ GROK_SUPPORTED_EFFORTS: tuple[str, ...] = (
     "max",
 )
 
+# Command Code (commandcode.ai) models. Fallback when discovery is unavailable.
+# Command Code is a multi-provider gateway whose catalog overlaps Codex/Claude/
+# Gemini/Grok ids; the hardcoded fallback therefore contains only ids NOT
+# claimed by another provider's routing rules (so ``provider_for`` never
+# hijacks a native provider). Discovery (``cmd --list-models``) populates the
+# runtime set with the full catalog (see config.get_commandcode_models_ordered).
+COMMANDCODE_MODELS_ORDERED: tuple[str, ...] = (
+    "deepseek/deepseek-v4-flash",
+)
+COMMANDCODE_MODELS: frozenset[str] = frozenset(COMMANDCODE_MODELS_ORDERED)
+# Reasoning-effort levels the Command Code CLI accepts via ``--effort``.
+COMMANDCODE_SUPPORTED_EFFORTS: tuple[str, ...] = (
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+)
+
 _runtime_gemini: list[frozenset[str]] = [frozenset()]
 _runtime_antigravity: list[frozenset[str]] = [frozenset()]
 _runtime_grok: list[frozenset[str]] = [frozenset()]
 _runtime_grok_ordered: list[tuple[str, ...]] = [()]
+_runtime_commandcode: list[frozenset[str]] = [frozenset()]
+_runtime_commandcode_ordered: list[tuple[str, ...]] = [()]
 
 
 class ModelRegistry:
@@ -673,6 +696,12 @@ class ModelRegistry:
             return "antigravity"
         if model_id in GROK_MODELS or model_id in _runtime_grok[0] or model_id.startswith("grok-"):
             return "grok"
+        if (
+            model_id in COMMANDCODE_MODELS
+            or model_id in _runtime_commandcode[0]
+            or model_id.startswith("commandcode-")
+        ):
+            return "commandcode"
         return "codex"
 
 
@@ -751,3 +780,40 @@ def reset_grok_models() -> None:
     """Clear runtime Grok models. For test teardown only."""
     _runtime_grok[0] = frozenset()
     _runtime_grok_ordered[0] = ()
+
+
+def get_commandcode_models() -> frozenset[str]:
+    """Return dynamically discovered Command Code models (may be empty)."""
+    return _runtime_commandcode[0]
+
+
+def get_commandcode_models_ordered() -> tuple[str, ...]:
+    """Return Command Code models in discovery order, or the hardcoded fallback list."""
+    ordered = _runtime_commandcode_ordered[0]
+    if ordered:
+        return ordered
+    return COMMANDCODE_MODELS_ORDERED
+
+
+def set_commandcode_models(models: tuple[str, ...] | frozenset[str] | list[str]) -> None:
+    """Set runtime Command Code models discovered from ``cmd --list-models``.
+
+    Refuses to overwrite with an empty set to prevent cache wipe.
+    Preserves discovery order when a sequence is provided.
+    """
+    if not models:
+        return
+    if isinstance(models, frozenset):
+        ordered = tuple(sorted(models))
+    else:
+        ordered = tuple(dict.fromkeys(models))  # dedupe, keep order
+    if not ordered:
+        return
+    _runtime_commandcode_ordered[0] = ordered
+    _runtime_commandcode[0] = frozenset(ordered)
+
+
+def reset_commandcode_models() -> None:
+    """Clear runtime Command Code models. For test teardown only."""
+    _runtime_commandcode[0] = frozenset()
+    _runtime_commandcode_ordered[0] = ()

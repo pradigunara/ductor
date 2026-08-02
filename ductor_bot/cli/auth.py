@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ductor_bot.cli.antigravity_runtime import antigravity_process_env
+from ductor_bot.cli.commandcode_discovery import find_commandcode_cli
 from ductor_bot.cli.gemini_utils import find_gemini_cli
 from ductor_bot.config import NULLISH_TEXT_VALUES
 from ductor_bot.infra.platform import CREATION_FLAGS as _CREATION_FLAGS
@@ -487,6 +488,66 @@ def check_grok_auth() -> AuthResult:
     return result
 
 
+def check_commandcode_auth() -> AuthResult:
+    """Check Command Code CLI (``cmd`` / ``commandcode``) auth.
+
+    The CLI stores credentials in ``~/.commandcode/auth.json`` (apiKey,
+    userId, userName, keyName, authenticatedAt). ``cmd status`` probes the
+    live API as a fallback so a fresh login without a persisted file is
+    still detected.
+    """
+    try:
+        default_home = str(Path.home() / ".commandcode")
+    except (RuntimeError, OSError):
+        logger.debug("Command Code auth: home directory unresolvable; treating as NOT_FOUND")
+        return AuthResult("commandcode", AuthStatus.NOT_FOUND)
+
+    cc_home = Path(os.environ.get("COMMANDCODE_HOME", default_home))
+    auth_file = cc_home / "auth.json"
+    binary = find_commandcode_cli()
+
+    if auth_file.is_file() and auth_file.stat().st_size > 0:
+        mtime = datetime.fromtimestamp(auth_file.stat().st_mtime, tz=UTC)
+        result = AuthResult("commandcode", AuthStatus.AUTHENTICATED, auth_file, mtime)
+        logger.debug("Auth check provider=%s status=%s", result.provider, result.status)
+        return result
+
+    if binary is not None and _commandcode_cli_logged_in(binary):
+        result = AuthResult("commandcode", AuthStatus.AUTHENTICATED)
+        logger.debug("Auth check provider=%s status=%s (cli)", result.provider, result.status)
+        return result
+
+    if binary is not None or auth_file.exists():
+        result = AuthResult("commandcode", AuthStatus.INSTALLED)
+        logger.debug("Auth check provider=%s status=%s", result.provider, result.status)
+        return result
+
+    result = AuthResult("commandcode", AuthStatus.NOT_FOUND)
+    logger.debug("Auth check provider=%s status=%s", result.provider, result.status)
+    return result
+
+
+def _commandcode_cli_logged_in(binary: str) -> bool:
+    """Run ``cmd status`` and return True when the CLI reports authentication."""
+    try:
+        proc = subprocess.run(
+            [binary, "status"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            creationflags=_CREATION_FLAGS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug("Command Code CLI auth probe failed: %s", exc)
+        return False
+
+    output = f"{proc.stdout}\n{proc.stderr}".lower()
+    if any(token in output for token in ("not logged in", "not authenticated", "sign in")):
+        return False
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
 def _grok_cli_logged_in(binary: str) -> bool:
     """Run ``grok models`` and return True when the CLI reports an authenticated account."""
     try:
@@ -523,6 +584,7 @@ _CHECKERS: dict[str, Callable[[], AuthResult]] = {
     "gemini": check_gemini_auth,
     "antigravity": check_antigravity_auth,
     "grok": check_grok_auth,
+    "commandcode": check_commandcode_auth,
 }
 
 

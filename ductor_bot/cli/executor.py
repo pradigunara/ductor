@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from ductor_bot.cli.base import (
     _IS_WINDOWS,
@@ -28,6 +30,76 @@ from ductor_bot.infra.process_tree import force_kill_process_tree
 logger = logging.getLogger(__name__)
 
 
+def _augment_commandcode_path(env: dict[str, str]) -> None:
+    """Prepend the Command Code CLI's bin dir (and node's) to ``env["PATH"]``.
+
+    The service (systemd) PATH may omit the bun/npm-global/nvm/volta dirs
+    where ``cmd`` and its ``node`` runtime live. Prepending the CLI's own bin
+    dir plus any dir that holds a ``node`` binary makes the fallback-located
+    CLI actually runnable.
+    """
+    try:
+        from ductor_bot.cli.commandcode_discovery import find_commandcode_cli
+
+        cli = find_commandcode_cli()
+    except Exception:  # pragma: no cover - lookup failure is non-fatal
+        return
+    if not cli:
+        return
+
+    extra_dirs: list[str] = [str(Path(cli).parent)]
+    node_dir = _find_node_bin_dir()
+    if node_dir:
+        extra_dirs.append(node_dir)
+
+    current = env.get("PATH", "")
+    present = set(current.split(os.pathsep))
+    additions = [d for d in extra_dirs if d and d not in present]
+    if not additions:
+        return
+    env["PATH"] = os.pathsep.join(additions) + (os.pathsep + current if current else "")
+
+
+def _find_node_bin_dir() -> str | None:
+    """Return the dir containing a real ``node`` binary, or ``None``.
+
+    Probes bin dirs for actual ``node`` executables (not shims): volta's
+    ``tools/image/node/<ver>/bin`` layout, nvm, bun, npm-global, user-local.
+    The volta top-level ``~/.volta/bin`` is a shim dir that needs volta env
+    setup, so it is intentionally not probed.
+    """
+    import shutil
+
+    node = shutil.which("node")
+    if node:
+        candidate = Path(node).resolve()
+        if candidate.is_file() and (candidate.parent / "node").is_file():
+            return str(candidate.parent)
+
+    home = Path.home()
+    candidates: list[Path] = []
+    volta_tools = home / ".volta" / "tools" / "image" / "node"
+    if volta_tools.is_dir():
+        candidates.extend(
+            (version_dir / "bin") for version_dir in sorted(volta_tools.iterdir(), reverse=True)
+        )
+    candidates.extend(
+        [
+            *sorted(
+                (home / ".nvm" / "versions" / "node").glob("*/bin"),
+                reverse=True,
+            ),
+            home / ".bun" / "bin",
+            home / ".npm-global" / "bin",
+            home / ".local" / "bin",
+        ]
+    )
+    for bin_dir in candidates:
+        if (bin_dir / "node").is_file() or (bin_dir / "node.exe").is_file():
+            return str(bin_dir)
+    return None
+
+
 def build_subprocess_env(config: CLIConfig) -> dict[str, str] | None:
     """Build environment dict with agent identification vars.
 
@@ -42,6 +114,13 @@ def build_subprocess_env(config: CLIConfig) -> dict[str, str] | None:
     from ductor_bot.infra.env_secrets import load_env_secrets
 
     env = os.environ.copy()
+
+    # Service environments (systemd) run with a minimal PATH that may omit the
+    # dirs where provider CLIs live. For Command Code, prepend the CLI's bin
+    # dir (and node's dir, since `cmd` is a node wrapper) to the subprocess
+    # PATH so the fallback-located binary can actually run.
+    if config.provider == "commandcode":
+        _augment_commandcode_path(env)
 
     # Merge user secrets (low priority — never override existing vars).
     working_dir = Path(config.working_dir)

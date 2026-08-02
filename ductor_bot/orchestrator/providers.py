@@ -10,13 +10,17 @@ from ductor_bot.config import (
     _GEMINI_ALIASES,
     ANTIGRAVITY_MODELS,
     CLAUDE_MODELS,
+    COMMANDCODE_MODELS,
     GROK_MODELS,
     ModelRegistry,
     get_antigravity_models,
+    get_commandcode_models,
+    get_commandcode_models_ordered,
     get_gemini_models,
     get_grok_models,
     get_grok_models_ordered,
     set_antigravity_models,
+    set_commandcode_models,
     set_gemini_models,
     set_grok_models,
 )
@@ -84,6 +88,8 @@ class ProviderManager:
             return "Antigravity"
         if provider == "grok":
             return "Grok Build"
+        if provider == "commandcode":
+            return "Command Code"
         return "Codex"
 
     # -- Auth / init ----------------------------------------------------------
@@ -140,6 +146,11 @@ class ProviderManager:
         set_grok_models(models)
         self.refresh_known_model_ids()
 
+    def on_commandcode_models_refresh(self, models: tuple[str, ...]) -> None:
+        """Callback for CommandCodeCacheObserver: update model registry."""
+        set_commandcode_models(models)
+        self.refresh_known_model_ids()
+
     def refresh_gemini_api_key_mode(self) -> bool:
         """Re-read ``~/.gemini/settings.json`` and update the cache.
 
@@ -157,10 +168,12 @@ class ProviderManager:
             CLAUDE_MODELS
             | ANTIGRAVITY_MODELS
             | GROK_MODELS
+            | COMMANDCODE_MODELS
             | _GEMINI_ALIASES
             | get_gemini_models()
             | get_antigravity_models()
             | get_grok_models()
+            | get_commandcode_models()
         )
 
     def resolve_runtime_target(self, requested_model: str | None = None) -> tuple[str, str]:
@@ -181,6 +194,10 @@ class ProviderManager:
             return self._config.model if self._config.provider == "claude" else "sonnet"
         if provider == "grok":
             return self._config.model if self._config.provider == "grok" else "grok-4.5"
+        if provider == "commandcode":
+            return (
+                self._config.model if self._config.provider == "commandcode" else _cc_default_model()
+            )
         if provider == "codex":
             codex = self._codex_cache_fn() if self._codex_cache_fn else None
             if codex:
@@ -199,7 +216,7 @@ class ProviderManager:
         - known model   (``@opus``)  -> (inferred_provider, model)
         - unknown                    -> None
         """
-        if key in ("claude", "codex", "gemini", "antigravity", "grok"):
+        if key in ("claude", "codex", "gemini", "antigravity", "grok", "commandcode"):
             return key, self.default_model_for_provider(key)
         if self.is_known_model(key):
             provider = self._models.provider_for(key)
@@ -222,6 +239,7 @@ class ProviderManager:
             "codex": ("Codex", "#10B981"),
             "antigravity": ("Antigravity", "#3B82F6"),
             "grok": ("Grok Build", "#111827"),
+            "commandcode": ("Command Code", "#6D28D9"),
         }
         providers: list[dict[str, object]] = []
         for pid in sorted(self._available_providers):
@@ -240,7 +258,19 @@ class ProviderManager:
                 models = sorted(antigravity) if antigravity else sorted(ANTIGRAVITY_MODELS)
             elif pid == "grok":
                 models = list(get_grok_models_ordered())
+            elif pid == "commandcode":
+                models = list(get_commandcode_models_ordered())
             else:
                 models = []
             providers.append({"id": pid, "name": name, "color": color, "models": models})
         return providers
+
+
+def _cc_default_model() -> str:
+    """Return the default Command Code model.
+
+    Prefers the discovery-ordered first entry (the CLI's ``(default)`` model
+    is moved to the front by discovery), falling back to the hardcoded list.
+    """
+    ordered = get_commandcode_models_ordered()
+    return ordered[0] if ordered else "deepseek/deepseek-v4-flash"

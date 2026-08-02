@@ -171,6 +171,23 @@ Recovery triggers handled in orchestrator flows:
   fallback `grok-4.5` / `grok-composer-2.5-fast`; any `grok-*` ID still routes
 - efforts: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`
 
+### Command Code
+
+- binary `cmd` (also resolves `commandcode`); install: https://commandcode.ai/docs/getting-started
+- headless `-p` with `--output-format json` (NDJSON event frames + one final
+  `result` line carrying `sessionId`/`finalText`/`usage`/`durationMs`); long
+  prompts (>24 KB) piped via stdin (auto-detected)
+- permission: `bypassPermissions` → `--yolo`, `auto-accept` → `--auto-accept`
+- sessions: `--continue` (most recent in cwd), `--resume <full session id>`
+- system prompt: no `--system-prompt` flag; `append_system_prompt` is prepended to the prompt
+- efforts: `low`/`medium`/`high`/`xhigh`/`max` are **per-model**; the wrapper
+  clamps a rejected effort to the closest supported level (higher wins on a
+  tie) and retries once, caching the resolution per `(model, effort)`
+- models: discovered via `cmd --list-models` into `commandcode_models.json`
+  (hourly refresh); the `(default)`-marked model is moved to the front
+- rules: loads `AGENTS.md` (like Codex/Grok); skills sync to `~/.commandcode/skills`
+- see `docs/commandcode-fork-notes.md` for pinned CLI behavior + rebase notes
+
 ## Auth detection (`auth.py`)
 
 Statuses: `AUTHENTICATED`, `INSTALLED`, `NOT_FOUND`.
@@ -186,6 +203,7 @@ Statuses: `AUTHENTICATED`, `INSTALLED`, `NOT_FOUND`.
   - `settings.json` selected auth mode
   - optional fallback to `~/.ductor/config/config.json` `gemini_api_key`
 - Grok: `~/.grok/auth.json`, then `XAI_API_KEY`, then `grok models` probe; install markers: binary or `config.toml`
+- Command Code: `~/.commandcode/auth.json`, then `cmd status` probe; install marker: binary
 
 ## Model caches
 
@@ -224,6 +242,15 @@ Each provider's cache observer is created only when the startup auth detection r
 - hourly refresh loop
 - refresh callback updates runtime Grok model registry (`set_grok_models`)
 - Telegram model selector shows discovery-ordered IDs via `get_grok_models_ordered()`
+
+### Command Code cache
+
+- file: `~/.ductor/config/commandcode_models.json`
+- discovery source: `discover_commandcode_models()` (`commandcode_discovery.py`) via `cmd --list-models`
+- loaded on startup (uses cache when fresh, refreshes when stale/missing)
+- hourly refresh loop
+- refresh callback updates runtime Command Code model registry (`set_commandcode_models`)
+- Telegram model selector shows discovery-ordered IDs via `get_commandcode_models_ordered()`
 
 ## Process registry
 

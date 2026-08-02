@@ -13,6 +13,9 @@ from pathlib import Path
 from shutil import which
 
 from ductor_bot.cli.codex_events import parse_codex_jsonl
+from ductor_bot.cli.commandcode_discovery import find_commandcode_cli
+from ductor_bot.cli.commandcode_events import parse_commandcode_json
+from ductor_bot.cli.commandcode_provider import _EFFORT_CACHE
 from ductor_bot.cli.gemini_events import parse_gemini_json
 from ductor_bot.cli.gemini_utils import find_gemini_cli
 from ductor_bot.cli.grok_events import parse_grok_json
@@ -108,6 +111,26 @@ def parse_grok_result(stdout: bytes) -> str:
     return raw[:2000]
 
 
+def parse_commandcode_result(stdout: bytes) -> str:
+    """Extract result text from Command Code CLI JSON output."""
+    if not stdout:
+        return ""
+    raw = stdout.decode(errors="replace").strip()
+    if not raw:
+        return ""
+    # The final line is the result frame; prefer it, else fall back to the
+    # last non-empty line (text-mode leak).
+    result_line = ""
+    for line in reversed(raw.splitlines()):
+        if line.strip():
+            result_line = line.strip()
+            break
+    text, _session_id, _usage, _turns, _is_error = parse_commandcode_json(result_line)
+    if text:
+        return text
+    return raw[:2000]
+
+
 def parse_result(provider: str, stdout: bytes) -> str:
     """Extract result text from provider-specific CLI output."""
     parser = _RESULT_PARSERS.get(provider, parse_claude_result)
@@ -192,6 +215,9 @@ def _build_codex_cmd(exec_config: TaskExecutionConfig, prompt: str) -> OneShotCo
 # Match GrokCLI: long prompts go through --prompt-file to avoid ARG_MAX.
 _GROK_PROMPT_ARGV_SOFT_LIMIT = 24_000
 
+# Match CommandCodeCLI: long prompts go via stdin (auto-detected by the CLI).
+_COMMANDCODE_PROMPT_ARGV_SOFT_LIMIT = 24_000
+
 
 def _build_grok_cmd(exec_config: TaskExecutionConfig, prompt: str) -> OneShotCommand | None:
     """Build a Grok Build CLI command for one-shot cron execution."""
@@ -228,6 +254,54 @@ def _build_grok_cmd(exec_config: TaskExecutionConfig, prompt: str) -> OneShotCom
     return OneShotCommand(cmd=cmd, cleanup_paths=cleanup)
 
 
+def _build_commandcode_cmd(exec_config: TaskExecutionConfig, prompt: str) -> OneShotCommand | None:
+    """Build a Command Code CLI command for one-shot cron execution.
+
+    Mirrors the provider wrapper: ``-p --output-format json`` with the prompt
+    via stdin when it exceeds the argv soft limit (stdin is auto-detected).
+
+    Reasoning effort is model-dependent and the one-shot path cannot retry, so
+    the effort is resolved through the same per-``(model, effort)`` cache the
+    foreground wrapper fills after a reject-and-clamp. When the mapping is not
+    cached yet, ``--effort`` is omitted and the CLI uses the model's own
+    default instead of failing the whole job.
+    """
+    cli = find_commandcode_cli()
+    if not cli:
+        return None
+    cmd = [cli, "-p", "--output-format", "json"]
+    if exec_config.model:
+        cmd += ["--model", exec_config.model]
+    if exec_config.permission_mode == "bypassPermissions":
+        cmd.append("--yolo")
+    elif exec_config.permission_mode == "auto-accept":
+        cmd.append("--auto-accept")
+    effort = _resolve_cron_commandcode_effort(exec_config)
+    if effort and effort != "default":
+        cmd += ["--effort", effort]
+    cmd.extend(exec_config.cli_parameters)
+
+    if len(prompt) > _COMMANDCODE_PROMPT_ARGV_SOFT_LIMIT:
+        return OneShotCommand(cmd=cmd, stdin_input=prompt.encode())
+    return OneShotCommand(cmd=[*cmd, prompt])
+
+
+def _resolve_cron_commandcode_effort(exec_config: TaskExecutionConfig) -> str | None:
+    """Resolve the Command Code effort for a one-shot cron run.
+
+    Uses the cached ``(model, effort) -> resolved`` mapping shared with the
+    foreground wrapper. Returns ``None`` when the requested effort is the
+    default or the mapping is not yet known (the CLI then picks the model's
+    own default rather than failing on an unsupported level).
+    """
+    requested = exec_config.reasoning_effort
+    if not requested or requested == "default":
+        return None
+    model = exec_config.model or "<default>"
+    resolved = _EFFORT_CACHE.get((model, requested))
+    return resolved if resolved is not None else None
+
+
 _CmdBuilder = Callable[[TaskExecutionConfig, str], OneShotCommand | None]
 _ResultParser = Callable[[bytes], str]
 
@@ -236,6 +310,7 @@ _CMD_BUILDERS: dict[str, _CmdBuilder] = {
     "gemini": _build_gemini_cmd,
     "codex": _build_codex_cmd,
     "grok": _build_grok_cmd,
+    "commandcode": _build_commandcode_cmd,
 }
 
 _RESULT_PARSERS: dict[str, _ResultParser] = {
@@ -243,6 +318,7 @@ _RESULT_PARSERS: dict[str, _ResultParser] = {
     "gemini": parse_gemini_result,
     "codex": parse_codex_result,
     "grok": parse_grok_result,
+    "commandcode": parse_commandcode_result,
 }
 
 

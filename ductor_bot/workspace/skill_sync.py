@@ -38,7 +38,9 @@ _SKIP_DIRS: frozenset[str] = frozenset(
 
 _SKILL_SYNC_INTERVAL = 30.0
 _MANAGED_MARKER = ".ductor_managed"
-_SYNCABLE_PROVIDERS: frozenset[str] = frozenset({"claude", "codex", "gemini", "grok"})
+_SYNCABLE_PROVIDERS: frozenset[str] = frozenset(
+    {"claude", "codex", "gemini", "grok", "commandcode"}
+)
 
 
 def _load_skill_sync_config(config_path: Path) -> tuple[bool, frozenset[str]]:
@@ -132,7 +134,7 @@ def _has_valid_skill_frontmatter(skill_dir: Path) -> bool:
     )
 
 
-def _cli_skill_dirs(enabled_providers: frozenset[str] | None = None) -> dict[str, Path]:
+def _cli_skill_dirs(enabled_providers: frozenset[str] | None = None) -> dict[str, Path]:  # noqa: C901
     """Return skill directories for installed CLIs.
 
     Only includes CLIs whose home directory exists on disk and whose sync is
@@ -156,6 +158,10 @@ def _cli_skill_dirs(enabled_providers: frozenset[str] | None = None) -> dict[str
         grok_home = Path(os.environ.get("GROK_HOME", str(Path.home() / ".grok")))
         if grok_home.is_dir():
             dirs["grok"] = grok_home / "skills"
+    if enabled_providers is None or "commandcode" in enabled_providers:
+        cc_home = Path(os.environ.get("COMMANDCODE_HOME", str(Path.home() / ".commandcode")))
+        if cc_home.is_dir():
+            dirs["commandcode"] = cc_home / "skills"
     return dirs
 
 
@@ -394,7 +400,7 @@ def sync_skills(paths: DuctorPaths, *, docker_active: bool = False) -> None:
         all_names.update(reg.keys())
 
     # Priority order: ductor > claude > codex > gemini
-    priority = ("ductor", "claude", "codex", "gemini", "grok")
+    priority = ("ductor", "claude", "codex", "gemini", "grok", "commandcode")
     for skill_name in sorted(all_names):
         canonical = _resolve_canonical(
             skill_name,

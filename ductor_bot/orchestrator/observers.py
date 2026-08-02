@@ -21,12 +21,14 @@ from ductor_bot.cleanup import CleanupObserver
 from ductor_bot.cli.antigravity_cache_observer import AntigravityCacheObserver
 from ductor_bot.cli.codex_cache import CodexModelCache
 from ductor_bot.cli.codex_cache_observer import CodexCacheObserver
+from ductor_bot.cli.commandcode_cache_observer import CommandCodeCacheObserver
 from ductor_bot.cli.gemini_cache_observer import GeminiCacheObserver
 from ductor_bot.cli.grok_cache_observer import GrokCacheObserver
 from ductor_bot.cli.service import CLIService
 from ductor_bot.config import (
     AgentConfig,
     get_antigravity_models,
+    get_commandcode_models,
     get_gemini_models,
     get_grok_models,
 )
@@ -61,6 +63,7 @@ class ObserverManager:
         self.gemini_cache_obs: GeminiCacheObserver | None = None
         self.antigravity_cache_obs: AntigravityCacheObserver | None = None
         self.grok_cache_obs: GrokCacheObserver | None = None
+        self.commandcode_cache_obs: CommandCodeCacheObserver | None = None
 
         self._config_reloader: ConfigReloader | None = None
         self._rule_sync_task: asyncio.Task[None] | None = None
@@ -68,15 +71,16 @@ class ObserverManager:
 
     # -- Model cache initialization -------------------------------------------
 
-    async def init_model_caches(
+    async def init_model_caches(  # noqa: PLR0912, C901
         self,
         *,
         installed_providers: frozenset[str],
         on_gemini_refresh: Callable[[tuple[str, ...]], None],
         on_antigravity_refresh: Callable[[tuple[str, ...]], None],
         on_grok_refresh: Callable[[tuple[str, ...]], None],
+        on_commandcode_refresh: Callable[[tuple[str, ...]], None] | None = None,
     ) -> CodexModelCache:
-        """Start Gemini, Antigravity, Grok, and Codex cache observers, return Codex cache.
+        """Start Gemini, Antigravity, Grok, Command Code, and Codex cache observers, return Codex cache.
 
         *installed_providers* comes from the startup auth detection, which is
         fallback-aware (e.g. finds a Gemini CLI installed under NVM that plain
@@ -117,6 +121,17 @@ class ObserverManager:
                 logger.warning("Grok cache is empty after startup")
         else:
             logger.debug("Grok CLI not found; cache observer disabled")
+
+        if "commandcode" in installed_providers and on_commandcode_refresh is not None:
+            cc_cache_path = self._paths.config_path.parent / "commandcode_models.json"
+            cc_observer = CommandCodeCacheObserver(cc_cache_path, on_refresh=on_commandcode_refresh)
+            await cc_observer.start()
+            self.commandcode_cache_obs = cc_observer
+
+            if not get_commandcode_models():
+                logger.warning("Command Code cache is empty after startup")
+        else:
+            logger.debug("Command Code CLI not found; cache observer disabled")
 
         codex_cache: CodexModelCache | None = None
         if "codex" in installed_providers:
@@ -208,6 +223,7 @@ class ObserverManager:
             "gemini_cache_obs",
             "antigravity_cache_obs",
             "grok_cache_obs",
+            "commandcode_cache_obs",
         )
         for attr in cache_observer_attrs:
             observer = getattr(self, attr)

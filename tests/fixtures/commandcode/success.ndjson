@@ -1,0 +1,37 @@
+{"type":"event","event":{"type":"run_start","sessionId":"ba387cf8-8f79-4a54-9cea-8fd2e6c7abc6"}}
+{"type":"event","event":{"type":"turn_start","turnNumber":1}}
+{"type":"event","event":{"type":"message_start"}}
+{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}
+{"type":"event","event":{"type":"model_trace","traceId":"bc1908c30e378a3e3b7bb5129c9f7f53"}}
+{"type":"event","event":{"type":"thinking_start"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"The"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" user"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" asked"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" me"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" to"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" reply"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" with"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" exactly"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" \""}}
+{"type":"event","event":{"type":"thinking_delta","delta":"P"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"ONG"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"\"."}}
+{"type":"event","event":{"type":"thinking_delta","delta":" Simple"}}
+{"type":"event","event":{"type":"thinking_delta","delta":","}}
+{"type":"event","event":{"type":"thinking_delta","delta":" direct"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"."}}
+{"type":"event","event":{"type":"thinking_delta","delta":" No"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" tool"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" calls"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" needed"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"."}}
+{"type":"event","event":{"type":"thinking_end","text":"The user asked me to reply with exactly \"PONG\". Simple, direct. No tool calls needed."}}
+{"type":"event","event":{"type":"text_delta","delta":"P"}}
+{"type":"event","event":{"type":"message_update","content":[{"type":"thinking","thinking":"The user asked me to reply with exactly \"PONG\". Simple, direct. No tool calls needed.","signature":""},{"type":"text","text":"P"}]}}
+{"type":"event","event":{"type":"text_delta","delta":"ONG"}}
+{"type":"event","event":{"type":"message_update","content":[{"type":"thinking","thinking":"The user asked me to reply with exactly \"PONG\". Simple, direct. No tool calls needed.","signature":""},{"type":"text","text":"PONG"}]}}
+{"type":"event","event":{"type":"model_request_end","model":"deepseek/deepseek-v4-flash","usage":{"inputTokens":72028,"outputTokens":24,"cacheReadTokens":11136,"cacheWriteTokens":0},"stopReason":"stop","effort":"high"}}
+{"type":"event","event":{"type":"message_end","content":[{"type":"thinking","thinking":"The user asked me to reply with exactly \"PONG\". Simple, direct. No tool calls needed.","signature":""},{"type":"text","text":"PONG"}]}}
+{"type":"event","event":{"type":"turn_end","turnNumber":1,"hadToolCalls":false,"usage":{"inputTokens":72028,"outputTokens":24,"cacheReadTokens":11136,"cacheWriteTokens":0}}}
+{"type":"event","event":{"type":"run_end","result":{"finalText":"PONG","stopReason":"end_turn","turnCount":1,"usage":{"inputTokens":72028,"outputTokens":24,"cacheReadTokens":11136,"cacheWriteTokens":0},"systemPromptTokens":null,"nextState":{"sessionId":"ba387cf8-8f79-4a54-9cea-8fd2e6c7abc6","messages":[{"role":"user","content":[{"type":"text","text":"reply with exactly: PONG"}],"meta":{"source":"user","createdAt":1785649873595,"messageId":"2d6fc559-cbe0-4327-996b-6c54fef16eda"}},{"role":"assistant","content":[{"type":"thinking","thinking":"The user asked me to reply with exactly \"PONG\". Simple, direct. No tool calls needed.","signature":""},{"type":"text","text":"PONG"}],"meta":{"source":"model","createdAt":1785649878550,"messageId":"9d1153cd-f6ac-4419-988f-defbc3a6a6fc"}}],"interrupted":false,"modState":{"workspace":{"cwd":"/tmp","platform":"linux","branch":null,"gitStatus":null,"recentCommits":[],"additionalDirectories":[]},"compaction":72028}}}}}
+{"type":"result","subtype":"success","sessionId":"ba387cf8-8f79-4a54-9cea-8fd2e6c7abc6","stopReason":"end_turn","usage":{"inputTokens":72028,"outputTokens":24,"cacheReadTokens":11136,"cacheWriteTokens":0},"durationMs":5059,"finalText":"PONG"}

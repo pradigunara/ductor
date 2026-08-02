@@ -15,12 +15,16 @@ from ductor_bot.config import (
     _GEMINI_ALIASES,
     CLAUDE_MODELS,
     CLAUDE_SUPPORTED_EFFORTS,
+    COMMANDCODE_MODELS,
+    COMMANDCODE_SUPPORTED_EFFORTS,
     GROK_MODELS,
     GROK_SUPPORTED_EFFORTS,
     get_gemini_models,
 )
 
-_TASK_PROVIDERS: frozenset[str] = frozenset({"claude", "codex", "gemini", "grok"})
+_TASK_PROVIDERS: frozenset[str] = frozenset(
+    {"claude", "codex", "gemini", "grok", "commandcode"}
+)
 
 
 def _looks_like_gemini_model(model: str) -> bool:
@@ -119,6 +123,14 @@ def _resolve_reasoning_effort(
         return _static_effort(
             requested_effort, GROK_SUPPORTED_EFFORTS, "Grok", model, explicit=explicit
         )
+    if provider == "commandcode":
+        return _static_effort(
+            requested_effort,
+            COMMANDCODE_SUPPORTED_EFFORTS,
+            "Command Code",
+            model,
+            explicit=explicit,
+        )
 
     if provider == "codex" and codex_cache:
         model_info = codex_cache.get_model(model)
@@ -189,6 +201,13 @@ def resolve_cli_config(
             msg = (
                 f"Invalid Grok model: {model}. Must be one of {sorted(known)} or a grok-* model ID"
             )
+            raise DuctorError(msg)
+    elif provider == "commandcode":
+        from ductor_bot.config import get_commandcode_models
+
+        known = COMMANDCODE_MODELS | get_commandcode_models()
+        if model not in known:
+            msg = f"Invalid Command Code model: {model}. Must be one of {sorted(known)}"
             raise DuctorError(msg)
     else:  # codex
         if codex_cache is None:

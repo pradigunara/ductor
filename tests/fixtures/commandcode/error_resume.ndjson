@@ -1,0 +1,1 @@
+{"type":"result","subtype":"error","usage":{"inputTokens":0,"outputTokens":0,"cacheReadTokens":0,"cacheWriteTokens":0},"durationMs":10,"finalText":"","error":"Error: No session \"no-such-session-xyz\" found to resume."}
