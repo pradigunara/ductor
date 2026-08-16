@@ -52,14 +52,25 @@ async def discover_antigravity_models() -> tuple[str, ...]:
 
 
 def _parse_models(output: str) -> tuple[str, ...]:
-    """Parse ``agy models`` stdout into a tuple of model display names."""
+    r"""Parse ``agy models`` stdout into a tuple of model display names.
+
+    agy 1.1.x prints one ``<id>\t<display name>`` row per model; the display
+    name (second column) is the valid ``--model`` value. Legacy single-column
+    output (display name only) is preserved for older agy versions.
+    """
     models: list[str] = []
     for raw in output.splitlines():
-        name = raw.strip()
-        if not name:
+        line = raw.strip()
+        if not line:
             continue
         # A usage/help banner means the command was rejected — treat as failure.
-        if name.startswith(("Usage:", "Flags:", "Available subcommands:")):
+        if line.startswith(("Usage:", "Flags:", "Available subcommands:")):
             return ()
+        if "\t" in line:
+            name = line.split("\t", 1)[1].strip()
+            if not name:
+                continue
+        else:
+            name = line
         models.append(name)
     return tuple(models)

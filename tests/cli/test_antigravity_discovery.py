@@ -43,6 +43,29 @@ def test_parse_models_skips_blank_lines() -> None:
     assert _parse_models("\nGemini 3.5 Flash (Medium)\n\n") == ("Gemini 3.5 Flash (Medium)",)
 
 
+def test_parse_models_tab_delimited_drops_ids() -> None:
+    # agy 1.1.x prints "<id>\t<display name>"; the display name is the valid
+    # --model value, so the id column must not leak into the model tuple.
+    output = (
+        "gemini-3.7-flash-medium\tGemini 3.7 Flash (Medium)\n"
+        "gemini-3.6-flash-high\tGemini 3.6 Flash (High)\n"
+        "claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)\n"
+    )
+    assert _parse_models(output) == (
+        "Gemini 3.7 Flash (Medium)",
+        "Gemini 3.6 Flash (High)",
+        "Claude Sonnet 4.6 (Thinking)",
+    )
+
+
+def test_parse_models_mixed_columns_and_blank_lines() -> None:
+    output = "gemini-3.7-flash-medium\tGemini 3.7 Flash (Medium)\n\nLegacy Model (Old)\n"
+    assert _parse_models(output) == (
+        "Gemini 3.7 Flash (Medium)",
+        "Legacy Model (Old)",
+    )
+
+
 def test_parse_models_rejects_usage_banner() -> None:
     assert _parse_models("Usage: agy models [flags]\n\nList available models") == ()
 
@@ -91,9 +114,17 @@ async def test_discover_returns_empty_when_agy_missing() -> None:
 
 async def test_cache_falls_back_when_discovery_empty(tmp_path: Path) -> None:
     cache_path = tmp_path / "antigravity_models.json"
-    with patch(
-        "ductor_bot.cli.antigravity_cache.discover_antigravity_models",
-        AsyncMock(return_value=()),
+    with (
+        patch(
+            "ductor_bot.cli.antigravity_cache.discover_antigravity_models",
+            AsyncMock(return_value=()),
+        ),
+        # Hermetic: the host's real ~/.gemini/antigravity-cli/settings.json must
+        # not leak its configured model into this test.
+        patch(
+            "ductor_bot.cli.antigravity_cache.configured_antigravity_models",
+            return_value=(),
+        ),
     ):
         cache = await AntigravityModelCache.load_or_refresh(cache_path, force_refresh=True)
 
